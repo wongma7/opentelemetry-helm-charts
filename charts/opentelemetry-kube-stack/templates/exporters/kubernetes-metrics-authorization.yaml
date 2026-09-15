@@ -1,0 +1,16 @@
+{{- if and .Values.kubernetesServiceMonitors.enabled .Values.kubernetesServiceMonitors.createTokenSecret }}
+{{- if .Values.kubernetesServiceMonitors.ignoreNamespaceSelectors }}
+{{- fail "kubernetesServiceMonitors.createTokenSecret cannot reuse a release-namespace Collector ServiceAccount when kubernetesServiceMonitors.ignoreNamespaceSelectors is true; create namespace-local token Secrets externally and set createTokenSecret to false" }}
+{{- end }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "opentelemetry-kube-stack.kubernetesMetrics.tokenSecretName" . }}
+  namespace: {{ include "opentelemetry-kube-stack.namespace" . }}
+  annotations:
+    kubernetes.io/service-account.name: {{ include "opentelemetry-kube-stack.kubernetesMetrics.serviceAccountName" . }}
+  labels:
+    {{- include "opentelemetry-kube-stack.labels" . | nindent 4 }}
+type: kubernetes.io/service-account-token
+{{- end }}

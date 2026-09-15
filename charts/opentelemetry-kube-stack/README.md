@@ -224,6 +224,35 @@ Consult also the [Helm Documentation on CRDs](https://helm.sh/docs/chart_best_pr
 
 _See [helm upgrade](https://helm.sh/docs/helm/helm_upgrade/) for command documentation._
 
+### Upgrade from 0.21.x to 0.22.x
+
+This change is based on [prometheus-community/helm-charts#7238](https://github.com/prometheus-community/helm-charts/pull/7238).
+
+The control-plane ServiceMonitors (kube-apiserver, kube-controller-manager, kube-scheduler, kube-etcd, kube-proxy, coredns, and kube-dns) no longer reference credentials on the Collector's filesystem. When `collectors.<name>.targetAllocator.prometheusCR.denyFSAccessThroughSMs` is `true`, the Target Allocator rejects endpoints containing `bearerTokenFile`, `tlsConfig.caFile`, `tlsConfig.certFile`, or `tlsConfig.keyFile`. The bearer token now comes from a Secret through `authorization`, and TLS certificate authorities use Kubernetes Secret or ConfigMap selectors. By default, TLS endpoints trust the `kube-root-ca.crt` ConfigMap maintained in each namespace.
+
+When `kubernetesServiceMonitors.enabled` and `kubernetesServiceMonitors.createTokenSecret` are both `true`, the chart creates a long-lived `kubernetes.io/service-account-token` Secret for the default daemon Collector's existing ServiceAccount. Set `kubernetesServiceMonitors.defaultServiceAccountName` to use a different existing ServiceAccount. The shared Collector and Target Allocator ClusterRole grants `GET` access to the `/metrics` non-resource URL. The generated Secret name can be overridden with `kubernetesServiceMonitors.tokenSecretName`.
+
+An authorization Secret must be in the same namespace as its ServiceMonitor. Automatic token Secret creation therefore requires the ServiceMonitors and selected Collector to be in the chart's release namespace. When `kubernetesServiceMonitors.ignoreNamespaceSelectors` is `true`, create namespace-local credentials externally and set `kubernetesServiceMonitors.createTokenSecret: false`.
+
+To manage the credential yourself, set `kubernetesServiceMonitors.createTokenSecret: false` and point every enabled component's `serviceMonitor.authorization` at an existing Secret. Set `authorization: null` instead for an endpoint that does not require authentication.
+
+The following settings have been removed or replaced. The `authorization` and `tlsConfig` objects are rendered in the Prometheus Operator `SafeAuthorization` and `SafeTLSConfig` formats.
+
+| Previous setting | Replacement |
+| --- | --- |
+| Hard-coded `bearerTokenFile` on every exporter ServiceMonitor | `<component>.serviceMonitor.authorization` |
+| Hard-coded kube-apiserver `tlsConfig.caFile` | `kubeApiServer.tlsConfig.ca` |
+| `kubeControllerManager.serviceMonitor.insecureSkipVerify` / `.serverName` and hard-coded `.caFile` | `kubeControllerManager.serviceMonitor.tlsConfig` |
+| `kubeScheduler.serviceMonitor.insecureSkipVerify` / `.serverName` and hard-coded `.caFile` | `kubeScheduler.serviceMonitor.tlsConfig` |
+| Hard-coded kube-proxy `tlsConfig.caFile` | `kubeProxy.serviceMonitor.tlsConfig.ca` |
+| `kubeEtcd.serviceMonitor.insecureSkipVerify` / `.serverName` / `.caFile` / `.certFile` / `.keyFile` | `kubeEtcd.serviceMonitor.tlsConfig` |
+
+`kubeControllerManager` and `kubeScheduler` now default to a literal `tlsConfig.insecureSkipVerify: true`. This matches the value that the previous Kubernetes-version-dependent logic selected for every Kubernetes version supported by the chart.
+
+Helm deep-merges values. When replacing a default `tlsConfig.ca.configMap` with a Secret, explicitly set `tlsConfig.ca.configMap: null` in addition to configuring `tlsConfig.ca.secret`.
+
+The Target Allocator reads Secret-backed endpoint credentials and sends them to Collectors. Its ServiceAccount must have permission to read the referenced Secrets; the chart's default ClusterRole already provides that access. Enable `collectors.<name>.targetAllocator.mtls.enabled`, as in the `prometheus-otel` example, to protect credentials in transit. Alternatively, use `allowInsecureAuthSecrets` only when transport security is provided separately.
+
 ### Upgrade from 0.6.x to 0.7.x
 
 Version 0.7.0 has unified the previous collectors (daemonset and deployment) in a single one. If you are using custom configurations for `cluster` collector, you will need to merge your `cluster` collector configuration with `daemon` collector and remove `collectors.cluster` section from your values file.

@@ -1,0 +1,15 @@
+---
+# Source: opentelemetry-kube-stack/templates/exporters/kubernetes-metrics-authorization.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: example-daemon-collector-token
+  namespace: default
+  annotations:
+    kubernetes.io/service-account.name: example-daemon-collector
+  labels:
+    helm.sh/chart: opentelemetry-kube-stack-0.22.0
+    app.kubernetes.io/version: "0.154.0"
+    app.kubernetes.io/managed-by: Helm
+    release: "example"
+type: kubernetes.io/service-account-token

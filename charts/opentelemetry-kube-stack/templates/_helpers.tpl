@@ -158,6 +158,31 @@ Create the name of the clusterRoleBinding to use
 {{- default (include "opentelemetry-kube-stack.fullname" .) .Values.clusterRole.clusterRoleBinding.name }}
 {{- end }}
 
+{{- define "opentelemetry-kube-stack.kubernetesMetrics.serviceAccountName" -}}
+{{- if .Values.kubernetesServiceMonitors.defaultServiceAccountName -}}
+{{- tpl .Values.kubernetesServiceMonitors.defaultServiceAccountName . -}}
+{{- else -}}
+{{- $collector := include "opentelemetry-kube-stack.mergeCollector" (dict "root" . "collector" .Values.collectors.daemon) | fromYaml -}}
+{{- if not $collector.enabled -}}
+{{- fail "kubernetesServiceMonitors.defaultServiceAccountName must name an existing Collector ServiceAccount when the default daemon Collector is disabled" -}}
+{{- end -}}
+{{- if $collector.serviceAccount -}}
+{{- $collector.serviceAccount -}}
+{{- else -}}
+{{- $merged := dict "Chart" .Chart "collector" $collector "Release" .Release "fullnameOverride" .Values.fullnameOverride -}}
+{{- printf "%s-collector" (include "opentelemetry-kube-stack.collectorFullname" $merged) -}}
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{- define "opentelemetry-kube-stack.kubernetesMetrics.tokenSecretName" -}}
+{{- if .Values.kubernetesServiceMonitors.tokenSecretName -}}
+{{- tpl .Values.kubernetesServiceMonitors.tokenSecretName . -}}
+{{- else -}}
+{{- printf "%s-token" (include "opentelemetry-kube-stack.kubernetesMetrics.serviceAccountName" . | trunc 57 | trimSuffix "-") | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+{{- end }}
+
 {{/*
 Optionally include the RBAC for the k8sCluster receiver
 */}}
